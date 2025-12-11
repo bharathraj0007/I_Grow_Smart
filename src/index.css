@@ -1,0 +1,215 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Colors - Farming Theme */
+    /* Light mode: Warm, earthy tones inspired by nature and agriculture */
+    --background: 40 25% 96%;
+    --foreground: 40 20% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 40 20% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 40 20% 15%;
+    /* Primary: Deep earthy green - represents crops and nature */
+    --primary: 132 58% 42%;
+    --primary-foreground: 0 0% 100%;
+    /* Secondary: Golden wheat/harvest color */
+    --secondary: 35 95% 68%;
+    --secondary-foreground: 40 20% 15%;
+    /* Accent: Warm soil/terracotta tone */
+    --accent: 15 85% 60%;
+    --accent-foreground: 0 0% 100%;
+    /* Muted: Soft beige/natural tone */
+    --muted: 40 20% 92%;
+    --muted-foreground: 40 10% 45%;
+    --destructive: 0 84.2365% 60.1961%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 20% 88%;
+    --input: 40 20% 94%;
+    --ring: 132 58% 42%;
+
+    /* Charts - Earth-inspired palette */
+    --chart-1: 132 58% 42%;
+    --chart-2: 35 95% 68%;
+    --chart-3: 15 85% 60%;
+    --chart-4: 100 40% 50%;
+    --chart-5: 50 70% 55%;
+
+    /* Sidebar - Warm earthly tones */
+    --sidebar: 40 30% 94%;
+    --sidebar-foreground: 40 20% 15%;
+    --sidebar-primary: 132 58% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 35 95% 68%;
+    --sidebar-accent-foreground: 40 20% 15%;
+    --sidebar-border: 40 20% 88%;
+    --sidebar-ring: 132 58% 42%;
+
+    /* Fonts - Warm, approachable typography */
+    --font-sans: Poppins, sans-serif;
+    --font-serif: Merriweather, serif;
+    --font-mono: JetBrains Mono, monospace;
+
+    /* Shadows */
+    --shadow-2xs: 0px 4px 8px -1px hsl(0 0% 0% / 0.05);
+    --shadow-xs: 0px 4px 8px -1px hsl(0 0% 0% / 0.05);
+    --shadow-sm: 0px 4px 8px -1px hsl(0 0% 0% / 0.10), 0px 1px 2px -2px hsl(0 0% 0% / 0.10);
+    --shadow: 0px 4px 8px -1px hsl(0 0% 0% / 0.10), 0px 1px 2px -2px hsl(0 0% 0% / 0.10);
+    --shadow-md: 0px 4px 8px -1px hsl(0 0% 0% / 0.10), 0px 2px 4px -2px hsl(0 0% 0% / 0.10);
+    --shadow-lg: 0px 4px 8px -1px hsl(0 0% 0% / 0.10), 0px 4px 6px -2px hsl(0 0% 0% / 0.10);
+    --shadow-xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.10), 0px 8px 10px -2px hsl(0 0% 0% / 0.10);
+    --shadow-2xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.25);
+
+    /* Misc */
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Dark mode: Deep earthy tones inspired by soil, night sky, and fertile land */
+    --background: 40 20% 12%;
+    --foreground: 40 20% 92%;
+    --card: 40 25% 18%;
+    --card-foreground: 40 20% 92%;
+    --popover: 40 25% 18%;
+    --popover-foreground: 40 20% 92%;
+    /* Primary: Bright earthy green for visibility in dark mode */
+    --primary: 132 60% 58%;
+    --primary-foreground: 40 20% 12%;
+    /* Secondary: Bright golden wheat color for dark mode */
+    --secondary: 35 95% 72%;
+    --secondary-foreground: 40 20% 12%;
+    /* Accent: Bright terracotta/soil tone */
+    --accent: 15 85% 65%;
+    --accent-foreground: 40 20% 12%;
+    --muted: 40 20% 30%;
+    --muted-foreground: 40 10% 60%;
+    --destructive: 0 84.2365% 60.1961%;
+    --destructive-foreground: 40 20% 12%;
+    --border: 40 20% 24%;
+    --input: 40 20% 24%;
+    --ring: 132 60% 58%;
+
+    --chart-1: 132 60% 58%;
+    --chart-2: 35 95% 72%;
+    --chart-3: 15 85% 65%;
+    --chart-4: 100 45% 60%;
+    --chart-5: 50 75% 60%;
+
+    --sidebar: 40 25% 16%;
+    --sidebar-foreground: 40 20% 90%;
+    --sidebar-primary: 132 60% 58%;
+    --sidebar-primary-foreground: 40 20% 12%;
+    --sidebar-accent: 35 95% 72%;
+    --sidebar-accent-foreground: 40 20% 12%;
+    --sidebar-border: 40 20% 24%;
+    --sidebar-ring: 132 60% 58%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    letter-spacing: var(--tracking-normal);
+  }
+}
+
+/* Farming-themed visual elements and patterns */
+body {
+  background-image: 
+    radial-gradient(circle at 20% 50%, hsl(40 25% 96%) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, hsl(132 20% 94%) 0%, transparent 50%);
+  background-attachment: fixed;
+}
+
+.dark body {
+  background-image: 
+    radial-gradient(circle at 20% 50%, hsl(40 20% 14%) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, hsl(132 25% 16%) 0%, transparent 50%);
+}
+
+/* Farming-themed pattern for hero sections */
+.farming-pattern {
+  background-image: 
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 35px,
+      rgba(132, 118, 51, 0.03) 35px,
+      rgba(132, 118, 51, 0.03) 70px
+    );
+}
+
+/* Soil texture effect */
+.soil-texture {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px
+    );
+}
+
+/* Leaf/plant motif */
+.plant-accent {
+  border-left: 4px solid hsl(var(--primary));
+  padding-left: 1rem;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Subtle leaf growing animation */
+@keyframes grow-leaf {
+  0% {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* Harvest wave animation */
+@keyframes harvest-wave {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
