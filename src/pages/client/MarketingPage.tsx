@@ -132,13 +132,8 @@ export default function MarketingPage() {
   const checkAdminStatus = async () => {
     if (!user) return;
     try {
-      const result = await blink.db.sql<{ isAdmin: string }>(`
-        SELECT is_admin FROM user_profiles WHERE user_id = ? LIMIT 1
-      `, [user.id]);
-      
-      if (result.rows.length > 0) {
-        setIsAdmin(result.rows[0].isAdmin === '1');
-      }
+      const prof = await blink.db.userProfiles.get<{ isAdmin?: string }>(user.id);
+      setIsAdmin(prof?.isAdmin === '1');
     } catch (error) {
       console.error('Error checking admin status:', error);
     }
@@ -1150,13 +1145,11 @@ export default function MarketingPage() {
                                           try {
                                             await blink.db.cropOffers.update(offer.id, { status: 'accepted' });
                                             
-                                            const buyerResult = await blink.db.sql(`
-                                              SELECT email, display_name FROM users WHERE id = ?
-                                            `, [offer.buyerId]);
-                                            
-                                            if (buyerResult && buyerResult.length > 0) {
-                                              const buyerEmail = buyerResult[0].email;
-                                              const buyerDisplayName = buyerResult[0].display_name || offer.buyerName;
+                                            const buyer = await blink.db.users.get<{ email: string; displayName?: string }>(offer.buyerId);
+
+                                            if (buyer?.email) {
+                                              const buyerEmail = buyer.email;
+                                              const buyerDisplayName = buyer.displayName || offer.buyerName;
                                               
                                               try {
                                                 await blink.notifications.email({

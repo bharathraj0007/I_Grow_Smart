@@ -213,3 +213,27 @@ body {
     transform: translateY(-4px);
   }
 }
+
+/* Hide Blink badge - Multiple selectors to catch all variations */
+[data-blink-badge],
+.blink-badge,
+[class*="blink-badge"],
+[id*="blink-badge"],
+iframe[src*="blink"],
+a[href*="blink.new"],
+a[data-blink],
+button[data-blink],
+div[data-auto-engineer],
+.auto-engineer-badge,
+[class*="auto-engineer"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Additional rule to hide any element with Blink-related attributes */
+[style*="blink"],
+[aria-label*="Blink"],
+[aria-label*="blink"] {
+  display: none !important;
+}

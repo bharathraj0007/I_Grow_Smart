@@ -68,46 +68,25 @@ export default function SignInPage() {
       const currentUser = blink.auth.me();
       
       if (currentUser) {
-        // For admin account, ensure profile exists with admin flag
-        if (email === DEFAULT_ADMIN_EMAIL) {
-          try {
-            // First check if profile already exists
-            const existingAdmin = await blink.db.sql<{ user_id: string }>(`
-              SELECT user_id FROM user_profiles WHERE user_id = ? LIMIT 1
-            `, [currentUser.id]);
-            
-            if (existingAdmin.rows.length === 0) {
-              // Only create if it doesn't exist
-              await blink.db.sql(`
-                INSERT INTO user_profiles (user_id, full_name, is_admin, phone_number, state, district, farm_size, farming_type, created_at, updated_at)
-                VALUES (?, 'System Administrator', '1', '', '', '', 0, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              `, [currentUser.id]);
-              console.log('✅ Admin profile created for user:', currentUser.id);
-            } else {
-              console.log('✅ Admin profile already exists for user:', currentUser.id);
-            }
-          } catch (profileError: any) {
-            console.log('⚠️ Profile creation error:', profileError.message);
-          }
-        } else {
-          // For regular users, create profile if it doesn't exist
-          try {
-            const existingProfile = await blink.db.sql<{ user_id: string }>(`
-              SELECT user_id FROM user_profiles WHERE user_id = ? LIMIT 1
-            `, [currentUser.id]);
-            
-            if (existingProfile.rows.length === 0) {
-              await blink.db.sql(`
-                INSERT INTO user_profiles (user_id, full_name, is_admin, phone_number, state, district, farm_size, farming_type, created_at, updated_at)
-                VALUES (?, ?, '0', '', '', '', 0, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              `, [currentUser.id, currentUser.displayName || 'User']);
-              console.log('✅ Regular user profile created:', currentUser.id);
-            } else {
-              console.log('✅ Regular user profile already exists:', currentUser.id);
-            }
-          } catch (profileError: any) {
-            console.log('⚠️ Regular profile creation error:', profileError.message);
-          }
+        // Ensure profile exists using CRUD APIs (raw SQL requires service role)
+        const existing = await blink.db.userProfiles.get(currentUser.id);
+      
+        if (!existing) {
+          await blink.db.userProfiles.create({
+            id: currentUser.id,
+            userId: currentUser.id,
+            fullName: email === DEFAULT_ADMIN_EMAIL ? 'System Administrator' : (currentUser.displayName || 'User'),
+            phoneNumber: '',
+            state: '',
+            district: '',
+            farmSize: 0,
+            farmingType: '',
+            isAdmin: email === DEFAULT_ADMIN_EMAIL ? '1' : '0'
+          });
+          console.log('✅ Profile created for user:', currentUser.id);
+        } else if (email === DEFAULT_ADMIN_EMAIL && existing.isAdmin !== '1') {
+          await blink.db.userProfiles.update(currentUser.id, { isAdmin: '1' });
+          console.log('✅ Elevated user to admin:', currentUser.id);
         }
       }
       
@@ -128,11 +107,8 @@ export default function SignInPage() {
       const timer = setTimeout(async () => {
         // Manually check admin status one more time
         try {
-          const adminCheck = await blink.db.sql<{ is_admin: string }>(`
-            SELECT is_admin FROM user_profiles WHERE user_id = ? LIMIT 1
-          `, [user.id]);
-          
-          const isUserAdmin = adminCheck.rows.length > 0 && adminCheck.rows[0].is_admin === '1';
+          const prof = await blink.db.userProfiles.get<{ isAdmin?: string }>(user.id);
+          const isUserAdmin = prof?.isAdmin === '1';
           
           setLoading(false); // Stop loading spinner
           

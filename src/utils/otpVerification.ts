@@ -101,16 +101,18 @@ export async function storeOTP(email: string, otp: string): Promise<boolean> {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
     
     // Delete any existing unverified OTPs for this email
-    await blink.db.sql(`
-      DELETE FROM email_otp_verification 
-      WHERE email = ? AND verified = 0
-    `, [email]);
-    
+    await blink.db.emailOtpVerification.deleteMany({
+      where: { email, verified: "0" }
+    });
+
     // Insert new OTP
-    await blink.db.sql(`
-      INSERT INTO email_otp_verification (email, otp_code, expires_at, verified, attempts)
-      VALUES (?, ?, ?, 0, 0)
-    `, [email, otp, expiresAt]);
+    await blink.db.emailOtpVerification.create({
+      email,
+      otpCode: otp,
+      expiresAt,
+      verified: "0",
+      attempts: 0
+    });
     
     console.log('✅ OTP stored for email:', email);
     return true;
@@ -126,21 +128,19 @@ export async function storeOTP(email: string, otp: string): Promise<boolean> {
 export async function verifyOTP(email: string, otp: string): Promise<{ success: boolean; message: string }> {
   try {
     // Find the most recent unverified OTP for this email
-    const result = await blink.db.sql(`
-      SELECT id, otp_code, expires_at, attempts
-      FROM email_otp_verification
-      WHERE email = ? AND verified = 0
-      ORDER BY created_at DESC
-      LIMIT 1
-    `, [email]);
-    
-    console.log('📊 Query result:', { rowCount: result.rows.length, rows: result.rows });
-    
-    if (result.rows.length === 0) {
+    const rows = await blink.db.emailOtpVerification.list<any>({
+      where: { email, verified: "0" },
+      orderBy: { createdAt: 'desc' },
+      limit: 1
+    });
+
+    console.log('📊 Query result:', { rowCount: rows.length, rows });
+
+    if (rows.length === 0) {
       return { success: false, message: 'No OTP found. Please request a new one.' };
     }
-    
-    const otpRecord = result.rows[0] as any;
+
+    const otpRecord = rows[0] as any;
     
     // Extract OTP code - handle both snake_case and camelCase
     const storedOTPCode = otpRecord.otp_code || otpRecord.otpCode;
@@ -174,11 +174,9 @@ export async function verifyOTP(email: string, otp: string): Promise<{ success: 
     
     if (storedOTP !== enteredOTP) {
       // Increment attempts
-      await blink.db.sql(`
-        UPDATE email_otp_verification
-        SET attempts = attempts + 1
-        WHERE id = ?
-      `, [recordId]);
+      await blink.db.emailOtpVerification.update(recordId, {
+        attempts: Number(attemptsCount) + 1
+      });
       
       const remainingAttempts = 3 - (Number(attemptsCount) + 1);
       return { 
@@ -188,11 +186,7 @@ export async function verifyOTP(email: string, otp: string): Promise<{ success: 
     }
     
     // OTP is valid - mark as verified
-    await blink.db.sql(`
-      UPDATE email_otp_verification
-      SET verified = 1
-      WHERE id = ?
-    `, [recordId]);
+    await blink.db.emailOtpVerification.update(recordId, { verified: "1" });
     
     console.log('✅ OTP verified successfully for:', email);
     return { success: true, message: 'Email verified successfully!' };
@@ -207,15 +201,13 @@ export async function verifyOTP(email: string, otp: string): Promise<{ success: 
  */
 export async function isEmailOTPVerified(email: string): Promise<boolean> {
   try {
-    const result = await blink.db.sql<{ verified: number }>(`
-      SELECT verified
-      FROM email_otp_verification
-      WHERE email = ? AND verified = 1
-      ORDER BY created_at DESC
-      LIMIT 1
-    `, [email]);
-    
-    return result.rows.length > 0 && Number(result.rows[0].verified) === 1;
+    const rows = await blink.db.emailOtpVerification.list<{ verified: number | string }>({
+      where: { email, verified: "1" },
+      orderBy: { createdAt: 'desc' },
+      limit: 1
+    });
+
+    return rows.length > 0 && Number(rows[0].verified) === 1;
   } catch (error) {
     console.error('Error checking OTP verification:', error);
     return false;
@@ -227,11 +219,22 @@ export async function isEmailOTPVerified(email: string): Promise<boolean> {
  */
 export async function cleanupExpiredOTPs(): Promise<void> {
   try {
-    await blink.db.sql(`
-      DELETE FROM email_otp_verification
-      WHERE expires_at < datetime('now')
-    `);
-    console.log('🧹 Cleaned up expired OTPs');
+    const all = await blink.db.emailOtpVerification.list<any>({ limit: 1000 });
+    const now = Date.now();
+    const expired = all.filter((r: any) => {
+      const exp = new Date(r.expiresAt || r.expires_at || '').getTime();
+      return Number.isFinite(exp) && exp < now;
+    });
+
+    for (const record of expired) {
+      try {
+        await blink.db.emailOtpVerification.delete(record.id);
+      } catch {
+        // ignore
+      }
+    }
+
+    console.log(`🧹 Cleaned up expired OTPs: ${expired.length}`);
   } catch (error) {
     console.error('Error cleaning up OTPs:', error);
   }

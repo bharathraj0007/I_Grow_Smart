@@ -31,66 +31,36 @@ export default function UsersManagement() {
     try {
       console.log('📊 Fetching users with profiles...');
       
-      // Join users and user_profiles tables to get complete information
-      const result = await blink.db.sql(`
-        SELECT 
-          u.id as user_id,
-          u.email,
-          u.display_name,
-          u.email_verified,
-          u.created_at as user_created_at,
-          up.full_name,
-          up.phone_number,
-          up.state,
-          up.district,
-          up.farm_size,
-          up.farming_type,
-          up.is_admin,
-          up.created_at,
-          up.updated_at
-        FROM users u
-        LEFT JOIN user_profiles up ON u.id = up.user_id
-        ORDER BY u.created_at DESC
-        LIMIT 1000
-      `);
-      
-      // Handle different response formats from the SDK
-      let rows: any[] = [];
-      if (Array.isArray(result)) {
-        rows = result;
-      } else if (result && typeof result === 'object' && Array.isArray(result.rows)) {
-        rows = result.rows;
-      } else if (result && typeof result === 'object') {
-        // If result is a single object, wrap it in an array
-        rows = [result];
-      } else {
-        rows = [];
-      }
-      
-      console.log(`✅ Fetched ${rows.length} users`);
-      
-      // Transform the data to match the component's expected format
-      const transformedUsers = rows.map((row: any) => {
-        // Prioritize full_name from profile, then display_name from users table
-        const name = row.full_name || row.display_name || 'Unknown User';
-        
+      // Load users and profiles separately (raw SQL requires service role)
+      const [userRows, profileRows] = await Promise.all([
+        blink.db.users.list<any>({ orderBy: { createdAt: 'desc' }, limit: 1000 }),
+        blink.db.userProfiles.list<any>({ limit: 1000 })
+      ]);
+
+      const profileByUserId = new Map<string, any>(profileRows.map((p: any) => [p.userId, p]));
+
+      const transformedUsers: EnhancedUserProfile[] = userRows.map((u: any) => {
+        const p = profileByUserId.get(u.id);
+        const name = p?.fullName || u.displayName || u.email?.split('@')[0] || 'Unknown User';
+
         return {
-          userId: row.user_id,
-          email: row.email,
-          displayName: row.display_name,
-          emailVerified: row.email_verified,
+          userId: u.id,
+          email: u.email,
+          displayName: u.displayName,
+          emailVerified: u.emailVerified,
           fullName: name,
-          phoneNumber: row.phone_number,
-          state: row.state,
-          district: row.district,
-          farmSize: row.farm_size,
-          farmingType: row.farming_type,
-          isAdmin: row.is_admin || '0',
-          createdAt: row.created_at || row.user_created_at,
-          updatedAt: row.updated_at
+          phoneNumber: p?.phoneNumber,
+          state: p?.state,
+          district: p?.district,
+          farmSize: p?.farmSize,
+          farmingType: p?.farmingType,
+          isAdmin: p?.isAdmin || '0',
+          createdAt: p?.createdAt || u.createdAt,
+          updatedAt: p?.updatedAt
         };
       });
-      
+
+      console.log(`✅ Fetched ${transformedUsers.length} users`);
       setUsers(transformedUsers);
     } catch (error) {
       console.error('❌ Error fetching users:', error);
