@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
 import type { AdminPermission, DatabaseTable, CRUDOperation } from '@/utils/adminPermissions';
 import { canAdminAccessTable } from '@/utils/adminPermissions';
 
@@ -20,7 +21,13 @@ export default function ProtectedRoute({
   requiredPermission,
   requiredTableAccess 
 }: ProtectedRouteProps) {
-  const { user, isAdmin, adminAccess, loading } = useAuth();
+  const { user, isAdmin, adminAccess, loading, login } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      login(window.location.href);
+    }
+  }, [loading, user, login]);
 
   if (loading) {
     return (
@@ -31,7 +38,11 @@ export default function ProtectedRoute({
   }
 
   if (!user) {
-    return <Navigate to="/signin" replace />;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   // Check if admin is required

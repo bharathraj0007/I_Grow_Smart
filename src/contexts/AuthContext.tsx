@@ -44,12 +44,9 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   adminAccess: AdminAccessLevel;
-  signUp: (email: string, password: string, displayName: string) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  sendVerificationEmail: () => Promise<void>;
+  login: (redirectUrl?: string) => void;
+  logout: () => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
-  checkOTPVerification: (email: string) => Promise<boolean>;
   sendPasswordResetEmail: (email: string) => Promise<boolean>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
 }
@@ -71,19 +68,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(userWithName);
       
       if (state.user) {
-        // Fetch (or create) user profile using CRUD APIs (raw SQL requires service role)
-        const fetchProfile = async () => {
+        const fetchOrCreateProfile = async () => {
           try {
-            const existing = await blink.db.userProfiles.get<UserProfile>(state.user.id);
-            if (existing) {
-              setProfile(existing);
-              console.log('👤 Profile loaded:', existing.fullName || userWithName?.displayName, 'Admin:', existing.isAdmin);
+            const rows = await blink.db.userProfiles.list<UserProfile>({
+              where: { userId: state.user!.id },
+              limit: 1,
+            });
+
+            if (rows.length > 0) {
+              setProfile(rows[0]);
+              console.log('👤 Profile loaded:', rows[0].fullName || userWithName?.displayName, 'Admin:', rows[0].isAdmin);
               return;
             }
 
+            // Create default profile
             console.log('📝 Creating new profile for user:', state.user.id);
-            await blink.db.userProfiles.upsert({
-              id: state.user.id,
+            await blink.db.userProfiles.create({
               userId: state.user.id,
               fullName: userWithName?.displayName || '',
               phoneNumber: '',
@@ -91,19 +91,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               district: '',
               farmSize: 0,
               farmingType: '',
-              isAdmin: '0'
+              isAdmin: '0',
             });
 
-            const created = await blink.db.userProfiles.get<UserProfile>(state.user.id);
-            setProfile(created);
-            console.log('✅ Profile ensured for user:', state.user.id);
-          } catch (error) {
-            console.error('Error fetching profile:', error);
-            setProfile(null);
+            const created = await blink.db.userProfiles.list<UserProfile>({
+              where: { userId: state.user.id },
+              limit: 1,
+            });
+            if (created.length > 0) {
+              setProfile(created[0]);
+              console.log('✅ Profile created successfully for user:', state.user.id);
+            } else {
+              console.error('Error fetching newly created profile for user:', state.user.id);
+              setProfile(null);
+            }
+          } catch (error: any) {
+            // If it's a UNIQUE constraint error, it means profile was created by another request
+            if (error.message?.includes('UNIQUE constraint failed')) {
+              console.log('ℹ️ Profile already exists (created by concurrent request)');
+              // Fetch the existing profile
+              try {
+                const existingResult = await blink.db.userProfiles.list<UserProfile>({
+                  where: { userId: state.user.id },
+                  limit: 1,
+                });
+                
+                if (existingResult.length > 0) {
+                  setProfile(existingResult[0]);
+                  console.log('✅ Loaded existing profile for user:', state.user.id);
+                } else {
+                  console.error('Error fetching existing profile after concurrent creation for user:', state.user.id);
+                  setProfile(null);
+                }
+              } catch (fetchError) {
+                console.error('Error fetching existing profile:', fetchError);
+                setProfile(null);
+              }
+            } else {
+              // Other error - log and continue
+              console.error('Error fetching or creating profile:', error);
+              setProfile(null);
+            }
           }
         };
 
-        await fetchProfile();
+        await fetchOrCreateProfile();
       } else {
         setProfile(null);
       }
@@ -114,90 +146,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signUp = async (email: string, password: string, displayName: string) => {
-    await blink.auth.signUp({ email, password, displayName });
-    // Send verification email automatically
-    await blink.auth.sendEmailVerification();
+  const login = (redirectUrl?: string) => {
+    // For headless mode, navigate to our custom signin page
+    // The actual sign-in is handled by the SignInPage component
+    window.location.href = `/signin?redirect=${encodeURIComponent(redirectUrl || window.location.href)}`;
   };
 
-  const signIn = async (email: string, password: string) => {
-    await blink.auth.signInWithEmail(email, password);
-  };
-
-  const signOut = async () => {
+  const logout = async () => {
     await blink.auth.signOut();
-  };
-
-  const sendVerificationEmail = async () => {
-    await blink.auth.sendEmailVerification();
   };
 
   const updateProfile = async (data: Partial<UserProfile>) => {
     if (!user) return;
-
+    
     try {
-      const existing = await blink.db.userProfiles.get<UserProfile>(user.id);
+      // Use upsert to handle both creation and update
+      await blink.db.userProfiles.upsert({
+        userId: user.id,
+        fullName: data.fullName ?? profile?.fullName ?? user.displayName ?? '',
+        phoneNumber: data.phoneNumber ?? profile?.phoneNumber ?? '',
+        state: data.state ?? profile?.state ?? '',
+        district: data.district ?? profile?.district ?? '',
+        farmSize: data.farmSize ?? profile?.farmSize ?? 0,
+        farmingType: data.farmingType ?? profile?.farmingType ?? '',
+        isAdmin: profile?.isAdmin ?? '0', // Keep existing isAdmin if not provided in data
+      });
 
-      if (existing) {
-        await blink.db.userProfiles.update(user.id, {
-          ...data
-        });
+      // Refresh profile from database
+      const refreshResult = await blink.db.userProfiles.list<UserProfile>({
+        where: { userId: user.id },
+        limit: 1,
+      });
+      
+      if (refreshResult.length > 0) {
+        setProfile(refreshResult[0]);
+        console.log('✅ Profile updated successfully');
       } else {
-        await blink.db.userProfiles.create({
-          userId: user.id,
-          fullName: data.fullName || '',
-          phoneNumber: data.phoneNumber || '',
-          state: data.state || '',
-          district: data.district || '',
-          farmSize: data.farmSize || 0,
-          farmingType: data.farmingType || '',
-          isAdmin: '0'
-        });
+        console.error('Error refreshing profile after update for user:', user.id);
+        setProfile(null); // Clear profile if refresh fails
       }
-
-      const refreshed = await blink.db.userProfiles.get<UserProfile>(user.id);
-      setProfile(refreshed);
-      console.log('✅ Profile updated successfully');
     } catch (error: any) {
       console.error('Error updating profile:', error);
       throw error;
     }
   };
 
-  const checkOTPVerification = async (email: string): Promise<boolean> => {
-    try {
-      const rows = await blink.db.emailOtpVerification.list<{ verified: number | string }>({
-        where: { email, verified: "1" },
-        orderBy: { createdAt: 'desc' },
-        limit: 1
-      });
-
-      return rows.length > 0 && Number(rows[0].verified) === 1;
-    } catch (error) {
-      console.error('Error checking OTP verification:', error);
-      return false;
-    }
-  };
-
   const sendPasswordResetEmail = async (email: string): Promise<boolean> => {
     try {
       // First, check if user exists
-      const userRows = await blink.db.users.list<{ id: string }>({ where: { email }, limit: 1 });
+      const userResult = await blink.db.users.list<{ id: string }>({
+        where: { email: email },
+        limit: 1,
+      });
 
-      if (userRows.length === 0) {
+      if (userResult.length === 0) {
         // User doesn't exist - still return true to avoid email enumeration
         console.log('⚠️ User not found, but returning success to prevent email enumeration');
         return true;
       }
 
-      const userId = userRows[0].id;
+      const userId = userResult[0].id;
 
       // Delete any existing password reset tokens for this user to prevent 409 conflict
       try {
-        await blink.db.passwordResetTokens.deleteMany({ where: { userId } });
+        await blink.db.passwordResetTokens.deleteMany({
+          where: { userId: userId },
+        });
         console.log('✅ Deleted existing password reset tokens for user');
       } catch (deleteError) {
         console.log('ℹ️ No existing tokens to delete or delete failed:', deleteError);
+        // Continue anyway - this is not critical
       }
 
       // Now send the password reset email
@@ -217,10 +235,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         try {
           // Get user ID again
-          const userRows = await blink.db.users.list<{ id: string }>({ where: { email }, limit: 1 });
+          const userResult = await blink.db.users.list<{ id: string }>({
+            where: { email: email },
+            limit: 1,
+          });
 
-          if (userRows.length > 0) {
-            await blink.db.passwordResetTokens.deleteMany({ where: { userId: userRows[0].id } });
+          if (userResult.length > 0) {
+            // Force delete all tokens with raw SQL
+            await blink.db.passwordResetTokens.deleteMany({
+              where: { userId: userResult[0].id },
+            });
           }
 
           // Wait a moment for the delete to process
@@ -269,12 +293,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     isAdmin,
     adminAccess,
-    signUp,
-    signIn,
-    signOut,
-    sendVerificationEmail,
+    login,
+    logout,
     updateProfile,
-    checkOTPVerification,
     sendPasswordResetEmail,
     resetPassword
   };

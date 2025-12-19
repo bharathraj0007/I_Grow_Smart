@@ -1,272 +1,130 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { toast } from 'sonner';
-import { Loader2, CheckCircle, Mail, ArrowLeft } from 'lucide-react';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-import { generateOTP, sendOTPEmail, storeOTP, verifyOTP } from '@/utils/otpVerification';
+import { Loader2, UserPlus, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { blink } from '@/lib/blink';
+import toast from 'react-hot-toast';
 
 export default function SignUpPage() {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    displayName: ''
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [showOTPScreen, setShowOTPScreen] = useState(false);
-  const [otpValue, setOtpValue] = useState('');
-  const [verifyingOTP, setVerifyingOTP] = useState(false);
-  const [resendingOTP, setResendingOTP] = useState(false);
-  const [otpError, setOtpError] = useState('');
-  const { signUp } = useAuth();
-  const navigate = useNavigate();
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+    general?: string;
+  }>({});
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const validateForm = () => {
+    const newErrors: typeof errors = {};
     
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
+    // Email validation - trim whitespace before checking
+    const trimmedEmail = formData.email.trim();
+    if (!trimmedEmail) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      newErrors.email = 'Please enter a valid email address';
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+    // Password validation
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    }
+
+    // Confirm password validation
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmitForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
+    setErrors({});
 
     try {
-      // Generate and send OTP
-      const otp = generateOTP();
-      const otpStored = await storeOTP(formData.email, otp);
+      // Create account directly with Blink Auth (no email verification)
+      await blink.auth.signUp({
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        displayName: formData.displayName.trim() || formData.email.split('@')[0],
+      });
+
+      setSuccess(true);
+      toast.success('Account created successfully!');
+
+      // Redirect to sign in after a short delay
+      setTimeout(() => {
+        navigate('/signin', {
+          state: { message: 'Account created! Please sign in.' }
+        });
+      }, 2000);
+
+    } catch (error: any) {
+      console.error('Sign up error:', error);
       
-      if (!otpStored) {
-        setError('Failed to generate verification code. Please try again.');
-        setLoading(false);
-        return;
+      if (error.message?.includes('EMAIL_ALREADY_EXISTS') || error.message?.includes('already exists')) {
+        setErrors({ general: 'An account with this email already exists. Please sign in instead.' });
+        toast.error('Email already registered');
+      } else if (error.message?.includes('WEAK_PASSWORD')) {
+        setErrors({ password: 'Password is too weak. Please use a stronger password.' });
+        toast.error('Password too weak');
+      } else {
+        setErrors({ general: error.message || 'Failed to create account. Please try again.' });
+        toast.error('Sign up failed');
       }
-      
-      const emailSent = await sendOTPEmail(formData.email, otp, formData.fullName);
-      
-      if (!emailSent) {
-        setError('Failed to send verification email. Please try again.');
-        setLoading(false);
-        return;
-      }
-      
-      toast.success('Verification code sent to your email!');
-      setShowOTPScreen(true);
-    } catch (err: any) {
-      setError(err.message || 'Failed to send verification code');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifyOTP = async () => {
-    if (otpValue.length !== 6) {
-      setOtpError('Please enter a 6-digit code');
-      return;
-    }
-
-    setVerifyingOTP(true);
-    setOtpError('');
-
-    try {
-      const result = await verifyOTP(formData.email, otpValue);
-      
-      if (!result.success) {
-        setOtpError(result.message);
-        setVerifyingOTP(false);
-        return;
-      }
-
-      // OTP verified - now create the account
-      await signUp(formData.email, formData.password, formData.fullName);
-      setSuccess(true);
-      toast.success('Email verified! Account created successfully.');
-      
-      // Redirect to sign in after 2 seconds
-      setTimeout(() => {
-        navigate('/signin');
-      }, 2000);
-    } catch (err: any) {
-      setOtpError(err.message || 'Failed to verify code');
-    } finally {
-      setVerifyingOTP(false);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    setResendingOTP(true);
-    setOtpError('');
-
-    try {
-      const otp = generateOTP();
-      const otpStored = await storeOTP(formData.email, otp);
-      
-      if (!otpStored) {
-        toast.error('Failed to generate verification code');
-        setResendingOTP(false);
-        return;
-      }
-      
-      const emailSent = await sendOTPEmail(formData.email, otp, formData.fullName);
-      
-      if (!emailSent) {
-        toast.error('Failed to send verification email');
-        setResendingOTP(false);
-        return;
-      }
-      
-      toast.success('New verification code sent!');
-      setOtpValue('');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to resend code');
-    } finally {
-      setResendingOTP(false);
-    }
-  };
-
-  const handleBackToForm = () => {
-    setShowOTPScreen(false);
-    setOtpValue('');
-    setOtpError('');
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
-  };
-
-  // OTP Verification Screen
-  if (showOTPScreen && !success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-accent/20 to-secondary/10 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <Mail className="w-8 h-8 text-primary" />
-              </div>
-            </div>
-            <CardTitle className="text-2xl font-bold text-center">Verify Your Email</CardTitle>
-            <CardDescription className="text-center">
-              We've sent a 6-digit verification code to<br />
-              <strong className="text-foreground">{formData.email}</strong>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {otpError && (
-              <Alert variant="destructive">
-                <AlertDescription>{otpError}</AlertDescription>
-              </Alert>
-            )}
-
-            <div className="space-y-4">
-              <div className="flex flex-col items-center space-y-2">
-                <Label htmlFor="otp">Enter Verification Code</Label>
-                <InputOTP
-                  maxLength={6}
-                  value={otpValue}
-                  onChange={(value) => {
-                    setOtpValue(value);
-                    setOtpError('');
-                  }}
-                >
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                  </InputOTPGroup>
-                </InputOTP>
-                <p className="text-xs text-muted-foreground">
-                  Code expires in 10 minutes
-                </p>
-              </div>
-
-              <Button
-                onClick={handleVerifyOTP}
-                className="w-full"
-                disabled={verifyingOTP || otpValue.length !== 6}
-              >
-                {verifyingOTP ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  'Verify Email'
-                )}
-              </Button>
-
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleResendOTP}
-                  className="w-full"
-                  disabled={resendingOTP}
-                >
-                  {resendingOTP ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Resending...
-                    </>
-                  ) : (
-                    'Resend Code'
-                  )}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={handleBackToForm}
-                  className="w-full"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to Registration
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Success Screen
+  // Success state
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-accent/20 to-secondary/10 p-4">
         <Card className="w-full max-w-md">
-          <CardHeader>
-            <div className="flex justify-center mb-4">
-              <CheckCircle className="w-16 h-16 text-green-600" />
+          <CardHeader className="space-y-2 text-center">
+            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <CheckCircle className="w-8 h-8 text-primary" />
             </div>
-            <CardTitle className="text-2xl font-bold text-center">Email Verified!</CardTitle>
-            <CardDescription className="text-center">
-              Your account has been created successfully. 
-              You can now sign in with your credentials.
+            <CardTitle className="text-2xl font-bold">Account Created!</CardTitle>
+            <CardDescription>
+              Your account has been created successfully.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button onClick={() => navigate('/signin')} className="w-full">
+          <CardContent className="space-y-4">
+            <Alert>
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>
+                Redirecting you to sign in...
+              </AlertDescription>
+            </Alert>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => navigate('/signin')}
+            >
               Go to Sign In
             </Button>
           </CardContent>
@@ -275,71 +133,107 @@ export default function SignUpPage() {
     );
   }
 
+  // Form state
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-accent/20 to-secondary/10 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Create Account</CardTitle>
-          <CardDescription className="text-center">
-            Join our farming community today
+        <CardHeader className="space-y-2 text-center">
+          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+            <UserPlus className="w-6 h-6 text-primary" />
+          </div>
+          <CardTitle className="text-2xl font-bold">Create Your Account</CardTitle>
+          <CardDescription>
+            Join I Grow Smart to access agricultural insights
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
+          <form onSubmit={handleSubmitForm} className="space-y-4">
+            {errors.general && (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{errors.general}</AlertDescription>
               </Alert>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input
-                id="fullName"
-                name="fullName"
-                type="text"
-                placeholder="John Doe"
-                value={formData.fullName}
-                onChange={handleChange}
-                required
-              />
+              <Label htmlFor="displayName">Full Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="displayName"
+                  type="text"
+                  placeholder="John Doe"
+                  className="pl-10"
+                  value={formData.displayName}
+                  onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="farmer@example.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
+              <Label htmlFor="email">Email Address</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="farmer@example.com"
+                  className="pl-10"
+                  value={formData.email}
+                  onChange={(e) => {
+                    setFormData({ ...formData, email: e.target.value });
+                    setErrors({ ...errors, email: undefined });
+                  }}
+                  required
+                />
+              </div>
+              {errors.email && (
+                <p className="text-sm text-destructive">{errors.email}</p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-              />
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="At least 8 characters"
+                  className="pl-10"
+                  value={formData.password}
+                  onChange={(e) => {
+                    setFormData({ ...formData, password: e.target.value });
+                    setErrors({ ...errors, password: undefined });
+                  }}
+                  required
+                />
+              </div>
+              {errors.password && (
+                <p className="text-sm text-destructive">{errors.password}</p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
-              />
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Re-enter your password"
+                  className="pl-10"
+                  value={formData.confirmPassword}
+                  onChange={(e) => {
+                    setFormData({ ...formData, confirmPassword: e.target.value });
+                    setErrors({ ...errors, confirmPassword: undefined });
+                  }}
+                  required
+                />
+              </div>
+              {errors.confirmPassword && (
+                <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
@@ -349,16 +243,16 @@ export default function SignUpPage() {
                   Creating Account...
                 </>
               ) : (
-                'Sign Up'
+                'Create Account'
               )}
             </Button>
 
-            <div className="text-center text-sm">
-              <span className="text-muted-foreground">Already have an account? </span>
-              <Link to="/signin" className="text-primary hover:underline">
-                Sign In
+            <p className="text-sm text-muted-foreground text-center">
+              Already have an account?{' '}
+              <Link className="text-primary hover:underline font-medium" to="/signin">
+                Sign in
               </Link>
-            </div>
+            </p>
           </form>
         </CardContent>
       </Card>

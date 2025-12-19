@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { Loader2, Lock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { blink } from '@/lib/blink';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -19,6 +20,7 @@ export default function ResetPasswordPage() {
   const [tokenValid, setTokenValid] = useState(false);
   
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
 
@@ -166,17 +168,17 @@ export default function ResetPasswordPage() {
                 </AlertDescription>
               </Alert>
 
-              <Button onClick={() => navigate('/signin')} className="w-full">
-                Go to Sign In
-              </Button>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+              <Button onClick={() => login(window.location.origin)} className="w-full">
+                 Go to Sign In
+               </Button>
+             </div>
+           ) : (
+             <form onSubmit={handleSubmit} className="space-y-4">
+               {error && (
+                 <Alert variant="destructive">
+                   <AlertDescription>{error}</AlertDescription>
+                 </Alert>
+               )}
 
               <div className="space-y-2">
                 <Label htmlFor="password">New Password</Label>
@@ -227,9 +229,13 @@ export default function ResetPasswordPage() {
 
               <div className="text-center text-sm">
                 <span className="text-muted-foreground">Remember your password? </span>
-                <Link to="/signin" className="text-primary hover:underline">
+                <button
+                  type="button"
+                  onClick={() => login(window.location.origin)}
+                  className="text-primary hover:underline"
+                >
                   Sign In
-                </Link>
+                </button>
               </div>
             </form>
           )}

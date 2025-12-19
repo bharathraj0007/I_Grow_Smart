@@ -30,33 +30,49 @@ export default function UsersManagement() {
   const fetchUsers = async () => {
     try {
       console.log('📊 Fetching users with profiles...');
-      
-      // Load users and profiles separately (raw SQL requires service role)
-      const [userRows, profileRows] = await Promise.all([
-        blink.db.users.list<any>({ orderBy: { createdAt: 'desc' }, limit: 1000 }),
-        blink.db.userProfiles.list<any>({ limit: 1000 })
+
+      const [usersRows, profilesRows] = await Promise.all([
+        blink.db.users.list<any>({
+          orderBy: { createdAt: 'desc' },
+          limit: 1000,
+        }),
+        blink.db.userProfiles.list<any>({
+          limit: 1000,
+        }),
       ]);
 
-      const profileByUserId = new Map<string, any>(profileRows.map((p: any) => [p.userId, p]));
+      const profilesByUserId = new Map<string, any>();
+      for (const p of profilesRows) {
+        const userId = String(p.userId || p.user_id || '');
+        if (userId) profilesByUserId.set(userId, p);
+      }
 
-      const transformedUsers: EnhancedUserProfile[] = userRows.map((u: any) => {
-        const p = profileByUserId.get(u.id);
-        const name = p?.fullName || u.displayName || u.email?.split('@')[0] || 'Unknown User';
+      const transformedUsers: EnhancedUserProfile[] = usersRows.map((u: any) => {
+        const userId = String(u.id || u.userId || u.user_id || '');
+        const profile = profilesByUserId.get(userId);
+
+        const name =
+          profile?.fullName ||
+          profile?.full_name ||
+          u.displayName ||
+          u.display_name ||
+          u.email?.split('@')[0] ||
+          'Unknown User';
 
         return {
-          userId: u.id,
+          userId,
           email: u.email,
-          displayName: u.displayName,
-          emailVerified: u.emailVerified,
+          displayName: u.displayName || u.display_name,
+          emailVerified: u.emailVerified ?? u.email_verified,
           fullName: name,
-          phoneNumber: p?.phoneNumber,
-          state: p?.state,
-          district: p?.district,
-          farmSize: p?.farmSize,
-          farmingType: p?.farmingType,
-          isAdmin: p?.isAdmin || '0',
-          createdAt: p?.createdAt || u.createdAt,
-          updatedAt: p?.updatedAt
+          phoneNumber: profile?.phoneNumber || profile?.phone_number,
+          state: profile?.state,
+          district: profile?.district,
+          farmSize: profile?.farmSize || profile?.farm_size,
+          farmingType: profile?.farmingType || profile?.farming_type,
+          isAdmin: (profile?.isAdmin || profile?.is_admin || '0') as string,
+          createdAt: profile?.createdAt || profile?.created_at || u.createdAt || u.created_at,
+          updatedAt: profile?.updatedAt || profile?.updated_at,
         };
       });
 

@@ -14,21 +14,20 @@ import {
   LogOut,
   ShoppingCart,
   Lock,
-  CheckCircle2,
-  Database
+  CheckCircle2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
 export default function AdminLayout() {
   const location = useLocation();
-  const { signOut, profile } = useAuth();
+  const { logout, profile } = useAuth();
   const adminAccess = useAdminAccess();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await logout();
       toast.success('Signed out successfully');
       navigate('/');
     } catch (error) {
@@ -38,7 +37,6 @@ export default function AdminLayout() {
 
   const navItems = [
     { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/admin/database', icon: Database, label: 'All Tables' },
     { path: '/admin/crops', icon: Sprout, label: 'Crops' },
     { path: '/admin/listings', icon: ShoppingCart, label: 'Crop Listings' },
     { path: '/admin/users', icon: Users, label: 'Users' },

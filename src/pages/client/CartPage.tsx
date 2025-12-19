@@ -30,7 +30,7 @@ import { createWhatsAppLink } from '@/utils/whatsappHelper';
 
 export default function CartPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const { items, removeFromCart, updateQuantity, clearCart, getTotalPrice } = useCart();
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -61,7 +61,7 @@ export default function CartPage() {
   const handleCheckout = async () => {
     if (!user) {
       toast.error('Please sign in to checkout');
-      navigate('/signin');
+      login(window.location.href);
       return;
     }
 
@@ -99,6 +99,22 @@ export default function CartPage() {
 
       // Create order items
       const orderItemPromises = items.map(async (item) => {
+        // Use sellerId from cart item (stored when item was added to cart)
+        // Fallback: fetch from listing if not available (for legacy cart items)
+        let sellerId = item.sellerId || '';
+        if (!sellerId) {
+          try {
+            const listing = await blink.db.cropListings.get(item.listingId);
+            if (listing && listing.userId) {
+              sellerId = listing.userId as string;
+            }
+          } catch (e) {
+            console.error('Error fetching listing for seller_id:', e);
+          }
+        }
+
+        console.log('Creating order item with seller_id:', sellerId, 'for crop:', item.cropName);
+
         await blink.db.orderItems.create({
           order_id: orderId,
           listing_id: item.listingId,
@@ -109,7 +125,8 @@ export default function CartPage() {
           total_price: item.quantity * item.pricePerUnit,
           seller_name: item.sellerName,
           seller_phone: item.sellerPhone,
-          seller_location: item.sellerLocation
+          seller_location: item.sellerLocation,
+          seller_id: sellerId
         });
 
         // Send email notification to seller (if available)
@@ -172,6 +189,53 @@ export default function CartPage() {
 
       await Promise.all(orderItemPromises);
 
+      // Step: Send seller notifications via edge function for each unique seller
+      const uniqueSellers = new Map<string, typeof items>();
+      items.forEach(item => {
+        if (!uniqueSellers.has(item.sellerPhone)) {
+          uniqueSellers.set(item.sellerPhone, []);
+        }
+        uniqueSellers.get(item.sellerPhone)!.push(item);
+      });
+
+      // Send notification for each seller
+      const notificationPromises = Array.from(uniqueSellers.entries()).map(([sellerPhone, sellerItems]) => {
+        const seller = sellerItems[0];
+        return fetch('https://m80q4b8r--seller-notification.functions.blink.new', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId,
+            orderNumber,
+            sellerPhone,
+            sellerName: seller.sellerName,
+            buyerName: checkoutData.buyerName,
+            buyerPhone: checkoutData.buyerPhone,
+            deliveryAddress: checkoutData.deliveryAddress,
+            items: sellerItems.map(item => ({
+              cropName: item.cropName,
+              quantity: item.quantity,
+              unit: item.unit,
+              pricePerUnit: item.pricePerUnit,
+              totalPrice: item.quantity * item.pricePerUnit
+            })),
+            notes: checkoutData.notes || ''
+          })
+        })
+          .then(res => res.json())
+          .then(data => {
+            console.log('Seller notification result:', data);
+            if (data.sellerEmailFound) {
+              console.log(`✓ Seller ${seller.sellerName} notification processed`);
+            }
+          })
+          .catch(notifError => {
+            console.error(`Failed to send notification to seller ${seller.sellerName}:`, notifError);
+          });
+      });
+
+      await Promise.all(notificationPromises);
+
       // Store order details for WhatsApp integration
       setPlacedOrderDetails({
         orderNumber,
@@ -189,7 +253,7 @@ export default function CartPage() {
 
       // Show success without clearing cart
       setOrderPlaced(true);
-      toast.success('Order placed successfully!');
+      toast.success('Order placed successfully! Sellers have been notified.');
 
     } catch (error) {
       console.error('Error placing order:', error);
@@ -452,7 +516,7 @@ export default function CartPage() {
                     onClick={() => {
                       if (!user) {
                         toast.error('Please sign in to checkout');
-                        navigate('/signin');
+                        login(window.location.href);
                         return;
                       }
                       setShowCheckout(true);

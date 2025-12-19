@@ -11,8 +11,6 @@ import AuthorizedRoute from './components/AuthorizedRoute';
 import HomePage from './pages/client/HomePage';
 import SignInPage from './pages/auth/SignInPage';
 import SignUpPage from './pages/auth/SignUpPage';
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import CropRecommendationPage from './pages/client/CropRecommendationPage';
 import MarketingPage from './pages/client/MarketingPage';
 import SchemesPage from './pages/client/SchemesPage';
@@ -36,7 +34,6 @@ import UsersManagement from './pages/admin/UsersManagement';
 import SchemesManagement from './pages/admin/SchemesManagement';
 import NewslettersManagement from './pages/admin/NewslettersManagement';
 import TicketsManagement from './pages/admin/TicketsManagement';
-import AllTablesView from './pages/admin/AllTablesView';
 
 function App() {
   return (
@@ -47,8 +44,6 @@ function App() {
           {/* Auth Routes */}
           <Route path="/signin" element={<SignInPage />} />
           <Route path="/signup" element={<SignUpPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Client Routes */}
           <Route element={<ClientLayout />}>
@@ -81,7 +76,6 @@ function App() {
             }
           >
             <Route index element={<AdminDashboard />} />
-            <Route path="database" element={<AllTablesView />} />
             <Route path="crops" element={<CropsManagement />} />
             <Route path="listings" element={<ListingsManagement />} />
             <Route path="users" element={<UsersManagement />} />
@@ -100,4 +94,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

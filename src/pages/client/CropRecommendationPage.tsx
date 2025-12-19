@@ -373,7 +373,7 @@ export default function CropRecommendationPage() {
       // Check if model is ready, if not it will train automatically
       if (!cropModel.isModelReady()) {
         setModelStatus('training');
-        toast.info('Training ML model for the first time... This may take a minute.');
+        toast('Training ML model for the first time... This may take a minute.');
       }
 
       // Get recommendations using both AI and rule-based approach

@@ -15,7 +15,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const navigate = useNavigate();
-  const { sendPasswordResetEmail: sendResetEmail } = useAuth();
+  const { sendPasswordResetEmail: sendResetEmail, login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +85,7 @@ export default function ForgotPasswordPage() {
 
               <div className="space-y-3">
                 <Button 
-                  onClick={() => navigate('/signin')} 
+                  onClick={() => login(window.location.origin)} 
                   variant="outline"
                   className="w-full"
                 >
@@ -144,9 +144,13 @@ export default function ForgotPasswordPage() {
 
               <div className="text-center text-sm">
                 <span className="text-muted-foreground">Remember your password? </span>
-                <Link to="/signin" className="text-primary hover:underline">
+                <button
+                  type="button"
+                  onClick={() => login(window.location.origin)}
+                  className="text-primary hover:underline"
+                >
                   Sign In
-                </Link>
+                </button>
               </div>
             </form>
           )}

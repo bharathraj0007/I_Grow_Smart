@@ -45,7 +45,7 @@ export default function ProfileSettingsPage() {
   // Redirect admin users to admin dashboard
   useEffect(() => {
     if (isAdmin) {
-      toast.info('Admin users do not have access to profile settings');
+      toast('Admin users do not have access to profile settings');
       navigate('/admin');
     }
   }, [isAdmin, navigate]);

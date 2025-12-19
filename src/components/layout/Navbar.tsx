@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { useState } from 'react';
 
 export default function Navbar() {
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, logout, login } = useAuth();
   const { getTotalItems } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,7 +49,7 @@ export default function Navbar() {
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await logout();
       toast.success('Signed out successfully');
       navigate('/');
     } catch (error) {
@@ -166,11 +166,20 @@ export default function Navbar() {
               </>
             ) : (
               <div className="flex items-center space-x-2">
-                <Button variant="ghost" asChild>
-                  <Link to="/signin">Sign In</Link>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/signin')}
+                  className="hidden sm:flex transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Sign In
                 </Button>
-                <Button asChild>
-                  <Link to="/signup">Sign Up</Link>
+                <Button
+                  variant="default"
+                  onClick={() => navigate('/signup')}
+                  className="transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <span className="hidden sm:inline">Sign Up</span>
+                  <span className="sm:hidden">Join</span>
                 </Button>
               </div>
             )}

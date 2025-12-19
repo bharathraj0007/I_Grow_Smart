@@ -104,7 +104,7 @@ export const DATABASE_TABLES: TableInfo[] = [
     displayName: 'Order Items',
     description: 'Individual items in customer orders',
     category: 'marketplace',
-    columns: ['id', 'order_id', 'listing_id', 'crop_name', 'quantity', 'unit', 'price_per_unit', 'total_price', 'seller_name', 'seller_phone', 'seller_location', 'created_at']
+    columns: ['id', 'order_id', 'listing_id', 'crop_name', 'quantity', 'unit', 'price_per_unit', 'total_price', 'seller_name', 'seller_phone', 'seller_location', 'seller_id', 'created_at']
   },
   {
     name: 'marketplace_transactions',

@@ -132,8 +132,15 @@ export default function MarketingPage() {
   const checkAdminStatus = async () => {
     if (!user) return;
     try {
-      const prof = await blink.db.userProfiles.get<{ isAdmin?: string }>(user.id);
-      setIsAdmin(prof?.isAdmin === '1');
+      const result = await blink.db.userProfiles.list<{ isAdmin: string }>({
+        where: { userId: user.id },
+        limit: 1,
+        select: ['isAdmin'],
+      });
+
+      if (result.length > 0) {
+        setIsAdmin(result[0].isAdmin === '1');
+      }
     } catch (error) {
       console.error('Error checking admin status:', error);
     }
@@ -829,6 +836,7 @@ export default function MarketingPage() {
                                   sellerName: listing.sellerName,
                                   sellerPhone: listing.sellerPhone,
                                   sellerLocation: listing.sellerLocation,
+                                  sellerId: listing.userId,
                                   quantity: 1,
                                   maxQuantity: listing.quantity,
                                   unit: listing.unit,
@@ -852,6 +860,7 @@ export default function MarketingPage() {
                                     sellerName: listing.sellerName,
                                     sellerPhone: listing.sellerPhone,
                                     sellerLocation: listing.sellerLocation,
+                                    sellerId: listing.userId,
                                     quantity: 1,
                                     maxQuantity: listing.quantity,
                                     unit: listing.unit,
@@ -1145,11 +1154,11 @@ export default function MarketingPage() {
                                           try {
                                             await blink.db.cropOffers.update(offer.id, { status: 'accepted' });
                                             
-                                            const buyer = await blink.db.users.get<{ email: string; displayName?: string }>(offer.buyerId);
-
-                                            if (buyer?.email) {
-                                              const buyerEmail = buyer.email;
-                                              const buyerDisplayName = buyer.displayName || offer.buyerName;
+                                            const buyerUser = await blink.db.users.get<any>(offer.buyerId);
+                                            
+                                            if (buyerUser) {
+                                              const buyerEmail = buyerUser.email;
+                                              const buyerDisplayName = buyerUser.displayName || buyerUser.display_name || offer.buyerName;
                                               
                                               try {
                                                 await blink.notifications.email({

@@ -8,6 +8,7 @@ interface CartItem {
   sellerName: string;
   sellerPhone: string;
   sellerLocation: string;
+  sellerId: string; // Seller's user_id for tracking sales
   quantity: number;
   maxQuantity: number;
   unit: string;

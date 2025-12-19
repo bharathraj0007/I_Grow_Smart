@@ -24,45 +24,29 @@ export default function AdminDashboard() {
       console.log('📊 Fetching admin dashboard stats...');
       setLoading(true);
       
-      // Run individual queries for each stat to avoid subquery issues
-      const [usersResult, cropsResult, schemesResult, newslettersResult, ticketsResult, recommendationsResult] = await Promise.all([
-        blink.db.sql<{ count: string }>(`SELECT COUNT(*) as count FROM users`),
-        blink.db.sql<{ count: string }>(`SELECT COUNT(*) as count FROM crops`),
-        blink.db.sql<{ count: string }>(`SELECT COUNT(*) as count FROM government_schemes WHERE is_active = '1'`),
-        blink.db.sql<{ count: string }>(`SELECT COUNT(*) as count FROM newsletters WHERE is_published = '1'`),
-        blink.db.sql<{ count: string }>(`SELECT COUNT(*) as count FROM support_tickets WHERE status = 'open'`),
-        blink.db.sql<{ count: string }>(`SELECT COUNT(*) as count FROM crop_recommendations`)
+      const [
+        totalUsers,
+        totalCrops,
+        totalSchemes,
+        totalNewsletters,
+        openTickets,
+        recommendations,
+      ] = await Promise.all([
+        blink.db.users.count(),
+        blink.db.crops.count(),
+        blink.db.governmentSchemes.count({ where: { isActive: '1' } }),
+        blink.db.newsletters.count({ where: { isPublished: '1' } }),
+        blink.db.supportTickets.count({ where: { status: 'open' } }),
+        blink.db.cropRecommendations.count(),
       ]);
 
-      console.log('📊 Query results:', {
-        users: usersResult,
-        crops: cropsResult,
-        schemes: schemesResult,
-        newsletters: newslettersResult,
-        tickets: ticketsResult,
-        recommendations: recommendationsResult
-      });
-
-      // Extract counts from results - handle both result.rows and direct array formats
-      const getCount = (result: { rows?: { count: string }[]; } | { count: string }[]): number => {
-        // Check if result has rows property (SDK format)
-        if (result && typeof result === 'object' && 'rows' in result && Array.isArray(result.rows) && result.rows.length > 0) {
-          return parseInt(String(result.rows[0].count)) || 0;
-        }
-        // Check if result is direct array (alternative format)
-        if (Array.isArray(result) && result.length > 0) {
-          return parseInt(String((result[0] as { count: string }).count)) || 0;
-        }
-        return 0;
-      };
-
       const newStats = {
-        totalUsers: getCount(usersResult),
-        totalCrops: getCount(cropsResult),
-        totalSchemes: getCount(schemesResult),
-        totalNewsletters: getCount(newslettersResult),
-        openTickets: getCount(ticketsResult),
-        recommendations: getCount(recommendationsResult)
+        totalUsers,
+        totalCrops,
+        totalSchemes,
+        totalNewsletters,
+        openTickets,
+        recommendations,
       };
 
       console.log('✅ Stats parsed:', newStats);
@@ -169,24 +153,15 @@ export default function AdminDashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <a
-              href="/admin/database"
-              className="p-4 border rounded-lg hover:bg-muted transition-colors bg-primary/5 border-primary/20"
-            >
-              <h3 className="font-semibold mb-1">📊 View All Tables</h3>
-              <p className="text-sm text-muted-foreground">
-                Browse all 14 database tables with full access
-              </p>
-            </a>
-            <a
-              href="/admin/crops"
-              className="p-4 border rounded-lg hover:bg-muted transition-colors"
-            >
-              <h3 className="font-semibold mb-1">Manage Crops</h3>
-              <p className="text-sm text-muted-foreground">
-                Add, edit, or remove crop information
-              </p>
-            </a>
+             <a
+               href="/admin/crops"
+               className="p-4 border rounded-lg hover:bg-muted transition-colors"
+             >
+               <h3 className="font-semibold mb-1">Manage Crops</h3>
+               <p className="text-sm text-muted-foreground">
+                 Add, edit, or remove crop information
+               </p>
+             </a>
             <a
               href="/admin/schemes"
               className="p-4 border rounded-lg hover:bg-muted transition-colors"

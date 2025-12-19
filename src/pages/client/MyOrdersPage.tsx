@@ -70,6 +70,7 @@ interface OrderItem {
   sellerName: string;
   sellerPhone: string;
   sellerLocation: string;
+  sellerId?: string;
   createdAt: string;
 }
 
@@ -78,7 +79,7 @@ interface OrderWithItems extends Order {
 }
 
 export default function MyOrdersPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, login } = useAuth();
   const [buyerOrders, setBuyerOrders] = useState<OrderWithItems[]>([]);
   const [sellerOrders, setSellerOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,16 +118,72 @@ export default function MyOrdersPage() {
       setBuyerOrders(buyerOrdersWithItems);
 
       // Fetch orders where user is a seller
-      // We need to find order items where seller phone matches user's phone
-      const allOrderItems = await blink.db.sql<OrderItem>(`
-        SELECT * FROM order_items 
-        WHERE seller_phone = ?
-        ORDER BY created_at DESC
-      `, [profile.phoneNumber || '']);
+      // Method 1: Match by seller_id (preferred, for new orders)
+      // Method 2: Match by seller phone (fallback for legacy orders)
+      
+      const userPhone = (profile.phoneNumber || '').trim();
 
-      // Group order items by order_id
+      // Normalize phone number: remove spaces, dashes, and special characters
+      const normalizePhone = (phone: string) => {
+        return phone.replace(/[\s\-\(\)]+/g, '').slice(-10); // Get last 10 digits
+      };
+
+      const normalizedUserPhone = userPhone ? normalizePhone(userPhone) : '';
+
+      // Fetch all order items (limit is high to get all)
+      const allOrderItems = await blink.db.orderItems.list<OrderItem>({
+        orderBy: { createdAt: 'desc' },
+        limit: 1000,
+      });
+
+      // Filter order items where:
+      // 1. seller_id matches user.id (new orders) OR
+      // 2. seller phone matches user phone (legacy orders)
+      const matchedOrderItems = allOrderItems.filter((item) => {
+        // Get seller_id from either camelCase or snake_case property (SDK may return either)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const itemSellerId = item.sellerId || (item as any).seller_id || '';
+        
+        // Primary match: by seller_id
+        if (itemSellerId && itemSellerId === user.id) {
+          return true;
+        }
+        
+        // Fallback match: by phone number (for legacy orders without seller_id)
+        if (normalizedUserPhone && item.sellerPhone) {
+          const normalizedSellerPhone = normalizePhone(item.sellerPhone);
+          return normalizedSellerPhone === normalizedUserPhone;
+        }
+        
+        return false;
+      });
+
+      console.log('Seller Order Retrieval Debug:', {
+        userId: user.id,
+        userPhone,
+        normalizedUserPhone,
+        totalOrderItems: allOrderItems.length,
+        matchedOrderItems: matchedOrderItems.length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        matchedByUserId: allOrderItems.filter(item => (item.sellerId || (item as any).seller_id) === user.id).length,
+        matchedByPhone: normalizedUserPhone ? allOrderItems.filter(item => {
+          const normalizedSellerPhone = normalizePhone(item.sellerPhone || '');
+          return normalizedSellerPhone === normalizedUserPhone;
+        }).length : 0,
+        sampleOrderItems: allOrderItems.slice(0, 3).map(item => ({
+          sellerId: item.sellerId,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          seller_id_raw: (item as any).seller_id,
+          sellerPhone: item.sellerPhone,
+          normalized: normalizePhone(item.sellerPhone || ''),
+          // Show all keys of item for debugging
+          allKeys: Object.keys(item)
+        }))
+      });
+
+      // Group matched order items by order_id
       const orderItemsByOrderId = new Map<string, OrderItem[]>();
-      allOrderItems.rows.forEach(item => {
+      matchedOrderItems.forEach((item) => {
         if (!orderItemsByOrderId.has(item.orderId)) {
           orderItemsByOrderId.set(item.orderId, []);
         }
@@ -149,7 +206,12 @@ export default function MyOrdersPage() {
           })
         );
 
-        setSellerOrders(sellerOrdersData.filter((o): o is OrderWithItems => o !== null));
+        // Sort by createdAt descending
+        const sortedSellerOrders = sellerOrdersData
+          .filter((o): o is OrderWithItems => o !== null)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        setSellerOrders(sortedSellerOrders);
       } else {
         setSellerOrders([]);
       }
@@ -528,7 +590,7 @@ export default function MyOrdersPage() {
         <AlertCircle className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
         <h2 className="text-2xl font-bold mb-4">Sign in Required</h2>
         <p className="text-muted-foreground mb-6">Please sign in to view your orders</p>
-        <Button onClick={() => window.location.href = '/signin'}>Sign In</Button>
+        <Button onClick={() => login(window.location.href)}>Sign In</Button>
       </div>
     );
   }
